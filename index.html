@@ -723,10 +723,13 @@
     ];
 
     // ============================================
-    // REST API (for map list)
+    // REST API (for map list) - using CORS proxy
     // ============================================
+    const CORS_PROXY = 'https://corsproxy.io/?';
+    
     async function feltApi(endpoint) {
-      const response = await fetch(`${FELT_API_BASE}${endpoint}`, {
+      const url = `${CORS_PROXY}${encodeURIComponent(FELT_API_BASE + endpoint)}`;
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${FELT_API_TOKEN}`,
           'Content-Type': 'application/json'
