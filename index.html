@@ -574,11 +574,19 @@
     <!-- Left Sidebar: Map List -->
     <aside class="sidebar-left">
       <div class="sidebar-section">
-        <div class="sidebar-title">Your Maps</div>
+        <div class="sidebar-title">Load a Map</div>
+        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <input type="text" id="map-url-input" placeholder="Paste Felt map URL or ID" 
+            style="flex: 1; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-primary); color: var(--text-primary); font-size: 0.875rem;">
+          <button onclick="loadMapFromInput()" class="btn btn-primary" style="padding: 10px 16px;">Load</button>
+        </div>
+      </div>
+      <div class="sidebar-section">
+        <div class="sidebar-title">Recent Maps</div>
         <div id="map-list" class="map-list">
-          <div class="loading">
-            <div class="spinner"></div>
-            <div>Loading maps...</div>
+          <div class="empty-state">
+            <div class="empty-icon">🗺️</div>
+            <div>Paste a Felt map URL above to get started</div>
           </div>
         </div>
       </div>
@@ -723,37 +731,60 @@
     ];
 
     // ============================================
-    // REST API (for map list) - using CORS proxy
+    // Map URL Input (no API needed - avoids CORS)
     // ============================================
-    const CORS_PROXY = 'https://corsproxy.io/?';
-    
-    async function feltApi(endpoint) {
-      const url = `${CORS_PROXY}${encodeURIComponent(FELT_API_BASE + endpoint)}`;
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${FELT_API_TOKEN}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      if (!response.ok) throw new Error(`API Error: ${response.status}`);
-      return response.json();
+    function extractMapId(input) {
+      // Handle full URLs like https://felt.com/map/Map-Name-abc123
+      const urlMatch = input.match(/felt\.com\/map\/[^\/]+-([a-zA-Z0-9]+)/);
+      if (urlMatch) return urlMatch[1];
+      
+      // Handle just the ID
+      if (/^[a-zA-Z0-9]+$/.test(input.trim())) return input.trim();
+      
+      return null;
     }
 
-    async function loadMaps() {
-      const container = document.getElementById('map-list');
-      try {
-        const data = await feltApi('/maps');
-        state.maps = data.data || data.maps || data || [];
-        renderMapList();
-      } catch (error) {
-        console.error('Failed to load maps:', error);
-        container.innerHTML = `
-          <div class="empty-state">
-            <div class="empty-icon">⚠️</div>
-            <div>Could not load maps</div>
-          </div>
-        `;
+    function loadMapFromInput() {
+      const input = document.getElementById('map-url-input').value;
+      const mapId = extractMapId(input);
+      
+      if (mapId) {
+        loadMap(mapId, 'Custom Map');
+        // Save to recent maps
+        addToRecentMaps(mapId, input);
+      } else {
+        alert('Please enter a valid Felt map URL or ID');
       }
+    }
+
+    function addToRecentMaps(mapId, url) {
+      const existing = state.maps.find(m => m.id === mapId);
+      if (!existing) {
+        state.maps.unshift({ 
+          id: mapId, 
+          title: `Map ${mapId.substring(0, 8)}...`,
+          thumbnail_url: null,
+          created_at: new Date().toISOString()
+        });
+        renderMapList();
+        saveRecentMaps();
+      }
+    }
+
+    function saveRecentMaps() {
+      try {
+        localStorage.setItem('felt-explorer-maps', JSON.stringify(state.maps.slice(0, 20)));
+      } catch (e) {}
+    }
+
+    function loadRecentMaps() {
+      try {
+        const saved = localStorage.getItem('felt-explorer-maps');
+        if (saved) {
+          state.maps = JSON.parse(saved);
+          renderMapList();
+        }
+      } catch (e) {}
     }
 
     function renderMapList() {
@@ -761,8 +792,8 @@
       if (!state.maps.length) {
         container.innerHTML = `
           <div class="empty-state">
-            <div class="empty-icon">📭</div>
-            <div>No maps found</div>
+            <div class="empty-icon">🗺️</div>
+            <div>Paste a Felt map URL above</div>
           </div>
         `;
         return;
@@ -1188,10 +1219,15 @@
     document.getElementById('action-clear').addEventListener('click', clearSelection);
     document.getElementById('action-table').addEventListener('click', showDataTable);
 
+    // Enter key to load map
+    document.getElementById('map-url-input').addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') loadMapFromInput();
+    });
+
     // ============================================
     // INIT
     // ============================================
-    loadMaps();
+    loadRecentMaps();
   </script>
 </body>
 </html>
